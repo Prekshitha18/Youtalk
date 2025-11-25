@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTALK - {{ video.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .video-container {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .action-btn {
+            transition: all 0.3s;
+        }
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Q&A Chat Styles */
+        .qa-section {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .question-bubble {
+            background: #007bff;
+            color: white;
+            border-radius: 18px;
+            border-bottom-right-radius: 5px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            max-width: 80%;
+            margin-left: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .answer-bubble {
+            background: #e9ecef;
+            color: #333;
+            border-radius: 18px;
+            border-bottom-left-radius: 5px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            max-width: 80%;
+            margin-right: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
+        }
+        .ai-badge {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .loading-bubble {
+            background: #f8f9fa;
+            border: 1px dashed #dee2e6;
+            border-radius: 18px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            max-width: 80%;
+            margin-right: auto;
+        }
+        .timestamp {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .feedback-buttons {
+            margin-top: 8px;
+        }
+        .feedback-btn {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            margin-right: 5px;
+        }
+        .question-input-container {
+            background: white;
+            padding: 15px;
+            border-top: 1px solid #dee2e6;
+            position: sticky;
+            bottom: 0;
+        }
+        .chat-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+        }
+        .loading-spinner {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fab fa-youtube me-2"></i>YouTALK
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="btn btn-outline-light btn-sm me-2" href="/dashboard">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                </a>
+                <span class="navbar-text me-3">Welcome, {{ session.user }}</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'info' }} alert-dismissible fade show">
+                        <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <!-- Video Player Section -->
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0"><i class="fas fa-play-circle me-2"></i>{{ video.title }}</h4>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if video.download_status == 'completed' and video.video_path %}
+                        <div class="video-container">
+                            <video controls class="w-100" style="max-height: 500px;">
+                                <source src="{{ url_for('download_video', video_id=video.id) }}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5 bg-light">
+                            <i class="fas fa-sync fa-spin fa-3x text-warning mb-3"></i>
+                            <h5>Video Processing</h5>
+                            <p class="text-muted">Your video is being processed. Please wait...</p>
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Q&A Section -->
+                {% if video.download_status == 'completed' %}
+                <div class="card mb-4">
+                    <div class="chat-header">
+                        <h5 class="mb-0"><i class="fas fa-robot me-2"></i>Ask Questions About This Video</h5>
+                        <small>Get answers about the video content, channel, and more</small>
+                    </div>
+                    <!-- Add this right after the chat-header div -->
+                    <div class="bg-light border-bottom">
+                        <div class="container-fluid py-2">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <small class="text-muted">
+                                        <i class="fas fa-file-alt me-1"></i>
+                                        {% if video.transcript_path %}
+                                        <span class="text-success">Transcript available - AI can answer from video content</span>
+                                        {% else %}
+                                        <span class="text-warning">Transcript processing - answers based on video info only</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-sm btn-outline-secondary me-2" onclick="loadQuestions()" title="Manual refresh">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                    <small class="text-muted" id="lastRefresh"></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Questions & Answers Chat -->
+                    <div class="qa-section" id="qaSection">
+                        <div id="questionsList">
+                            <!-- Questions will be loaded here dynamically -->
+                            <div class="text-center text-muted py-4" id="noQuestionsMessage">
+                                <i class="fas fa-comments fa-2x mb-2"></i>
+                                <p>No questions yet. Be the first to ask something!</p>
+                                <small class="text-muted">
+                                    {% if video.transcript_path %}
+                                    Try asking about the video content: "What are the main points?" or "Can you summarize the key ideas?"
+                                    {% else %}
+                                    Try asking: "What is this video about?" or "Who made this video?"
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ask Question Input -->
+                    <div class="question-input-container">
+                        <form id="askQuestionForm">
+                            <div class="input-group">
+                                <textarea 
+                                    class="form-control" 
+                                    id="questionInput" 
+                                    rows="1"
+                                    placeholder="Ask a question about this video..."
+                                    maxlength="500"
+                                    style="resize: none;"
+                                ></textarea>
+                                <button type="submit" class="btn btn-primary" id="askButton">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <small class="text-muted">
+                                    <span id="charCount">0</span>/500 characters
+                                </small>
+                                <div class="loading-spinner" id="loadingSpinner">
+                                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <small class="text-muted">AI is thinking...</small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Video Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Video Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Added by:</strong> {{ video.username }}</p>
+                                <p><strong>User Type:</strong> <span class="badge bg-{{ 'danger' if video.user_type == 'admin' else 'success' }}">{{ video.user_type }}</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Status:</strong> 
+                                    <span class="badge 
+                                        {% if video.download_status == 'completed' %}bg-success
+                                        {% elif video.download_status == 'downloading' %}bg-warning
+                                        {% elif video.download_status == 'failed' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ video.download_status }}
+                                    </span>
+                                </p>
+                                <p><strong>Added on:</strong> {{ video.created_at.strftime('%Y-%m-%d %H:%M') if video.created_at }}</p>
+                            </div>
+                        </div>
+                        <hr>
+                        <p><strong>YouTube Link:</strong> 
+                            <a href="{{ video.youtube_link }}" target="_blank" class="text-decoration-none">
+                                {{ video.youtube_link[:50] }}...
+                                <i class="fas fa-external-link-alt ms-1"></i>
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Section -->
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-download me-2"></i>Download Options</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Download Video -->
+                        <div class="d-grid mb-3">
+                            {% if video.download_status == 'completed' and video.video_path %}
+                            <a href="/download_video/{{ video.id }}" class="btn btn-primary action-btn">
+                                <i class="fas fa-download me-2"></i>Download Video (MP4)
+                            </a>
+                            {% else %}
+                            <button class="btn btn-secondary" disabled>
+                                <i class="fas fa-clock me-2"></i>Video Processing...
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <!-- Extract Audio -->
+                        <div class="d-grid mb-3">
+                            {% if video.download_status == 'completed' and video.audio_path %}
+                            <a href="/extract_audio/{{ video.id }}" class="btn btn-info action-btn">
+                                <i class="fas fa-music me-2"></i>Extract Audio (WAV)
+                            </a>
+                            {% else %}
+                            <button class="btn btn-secondary" disabled>
+                                <i class="fas fa-clock me-2"></i>Audio Processing...
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <!-- Extract Text -->
+                        <div class="d-grid mb-3">
+                            {% if video.download_status == 'completed' and video.transcript_path %}
+                            <a href="/extract_text/{{ video.id }}" class="btn btn-warning action-btn">
+                                <i class="fas fa-file-text me-2"></i>Download Transcript
+                            </a>
+                            {% else %}
+                            <button class="btn btn-secondary" disabled>
+                                <i class="fas fa-clock me-2"></i>Transcript Processing...
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        <!-- View Text -->
+                        <div class="d-grid">
+                            {% if video.download_status == 'completed' and video.transcript_path %}
+                            <a href="/view_text/{{ video.id }}" class="btn btn-success action-btn">
+                                <i class="fas fa-eye me-2"></i>View Transcript
+                            </a>
+                            {% else %}
+                            <button class="btn btn-secondary" disabled>
+                                <i class="fas fa-clock me-2"></i>View Transcript
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-tasks me-2"></i>Processing Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Video Download:</span>
+                                <span>
+                                    {% if video.download_status == 'completed' %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    {% elif video.download_status == 'downloading' %}
+                                    <i class="fas fa-sync fa-spin text-warning"></i>
+                                    {% elif video.download_status == 'failed' %}
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                    {% else %}
+                                    <i class="fas fa-clock text-secondary"></i>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Audio Extraction:</span>
+                                <span>
+                                    {% if video.audio_path %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    {% elif video.download_status == 'downloading' %}
+                                    <i class="fas fa-sync fa-spin text-warning"></i>
+                                    {% else %}
+                                    <i class="fas fa-clock text-secondary"></i>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>Speech to Text:</span>
+                                <span>
+                                    {% if video.transcript_path %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                    {% elif video.download_status == 'downloading' %}
+                                    <i class="fas fa-sync fa-spin text-warning"></i>
+                                    {% else %}
+                                    <i class="fas fa-clock text-secondary"></i>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if video.download_status == 'downloading' %}
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Processing may take a few minutes depending on video length.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- AI Info Card -->
+                {% if video.download_status == 'completed' %}
+                <div class="card mt-4">
+                    <div class="card-header bg-gradient ai-badge">
+                        <h6 class="mb-0"><i class="fas fa-brain me-2"></i>AI Assistant</h6>
+                    </div>
+                    <div class="card-body">
+                        <small class="text-muted">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            Ask questions about this video. The AI will analyze the transcript to provide accurate answers about the content.
+                        </small>
+                        <div class="mt-2">
+                            <small><strong>Try asking about:</strong></small>
+                            <ul class="small mt-1">
+                                <li>Specific topics mentioned in the video</li>
+                                <li>Key points or main ideas</li>
+                                <li>Quotes or statements from the speaker</li>
+                                <li>Summaries of specific sections</li>
+                            </ul>
+                        </div>
+                        {% if video.transcript_path %}
+                        <div class="alert alert-success mt-2 py-2">
+                            <small>
+                                <i class="fas fa-check-circle me-1"></i>
+                                <strong>Transcript Available:</strong> AI can answer questions based on video content
+                            </small>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning mt-2 py-2">
+                            <small>
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                <strong>Transcript Processing:</strong> Answers will be based on video metadata only
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-refresh variables
+        let refreshInterval = null;
+        let isAutoRefreshActive = false;
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, initializing Q&A system...');
+            initializeQA();
+        });
+
+        function initializeQA() {
+            // Character counter for question input
+            const questionInput = document.getElementById('questionInput');
+            const charCount = document.getElementById('charCount');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const askQuestionForm = document.getElementById('askQuestionForm');
+            
+            // Ensure loading spinner is hidden initially
+            if (loadingSpinner) {
+                loadingSpinner.style.display = 'none';
+            }
+            
+            // Set initial character count
+            if (charCount) {
+                charCount.textContent = '0';
+            }
+            
+            // Character counter event
+            if (questionInput && charCount) {
+                questionInput.addEventListener('input', function() {
+                    charCount.textContent = this.value.length;
+                    
+                    // Auto-resize textarea
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+            }
+            
+            // Form submission event
+            if (askQuestionForm) {
+                askQuestionForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    console.log('Form submitted');
+                    
+                    const question = questionInput.value.trim();
+                    if (!question) {
+                        alert('Please enter a question');
+                        return;
+                    }
+                    
+                    if (question.length < 5) {
+                        alert('Question must be at least 5 characters long');
+                        return;
+                    }
+                    
+                    await askQuestion(question);
+                });
+            }
+            
+            // Load existing questions
+            loadQuestions();
+        }
+
+        async function loadQuestions() {
+            try {
+                console.log('Loading existing questions...');
+                const response = await fetch(`/video/{{ video.id }}/questions`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load questions');
+                }
+                
+                const questions = await response.json();
+                
+                const questionsList = document.getElementById('questionsList');
+                const noQuestionsMessage = document.getElementById('noQuestionsMessage');
+                
+                if (!questionsList) {
+                    console.error('Questions list element not found');
+                    return;
+                }
+                
+                if (questions.length === 0) {
+                    if (noQuestionsMessage) {
+                        noQuestionsMessage.style.display = 'block';
+                    }
+                    return;
+                }
+                
+                if (noQuestionsMessage) {
+                    noQuestionsMessage.style.display = 'none';
+                }
+                
+                questionsList.innerHTML = '';
+                
+                // Sort questions by date (newest first) and display
+                questions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                
+                questions.forEach(q => {
+                    const questionHtml = createQuestionHtml(q);
+                    questionsList.insertAdjacentHTML('beforeend', questionHtml);
+                });
+                
+                // Scroll to bottom
+                scrollToBottom();
+                
+            } catch (error) {
+                console.error('Error loading questions:', error);
+            }
+        }
+
+        async function askQuestion(question) {
+            const askButton = document.getElementById('askButton');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const questionInput = document.getElementById('questionInput');
+            const noQuestionsMessage = document.getElementById('noQuestionsMessage');
+            
+            // Hide "no questions" message
+            if (noQuestionsMessage) {
+                noQuestionsMessage.style.display = 'none';
+            }
+            
+            // Show loading state
+            if (askButton) askButton.disabled = true;
+            if (loadingSpinner) loadingSpinner.style.display = 'flex';
+            if (questionInput) questionInput.disabled = true;
+            
+            try {
+                const response = await fetch(`/video/{{ video.id }}/ask`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Server error: ' + response.status);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Clear input and reset
+                    if (questionInput) {
+                        questionInput.value = '';
+                        questionInput.style.height = 'auto';
+                    }
+                    
+                    const charCount = document.getElementById('charCount');
+                    if (charCount) {
+                        charCount.textContent = '0';
+                    }
+                    
+                    // Show immediate success message
+                    showSuccess('Question submitted! Answer will appear shortly...');
+                    
+                    // Start polling for the answer
+                    startAnswerPolling(result.question_id);
+                    
+                } else {
+                    showError('Error: ' + (result.error || 'Unknown error'));
+                }
+                
+            } catch (error) {
+                console.error('Error asking question:', error);
+                showError('Error asking question. Please check your connection and try again.');
+            } finally {
+                // Hide loading state
+                if (askButton) askButton.disabled = false;
+                if (loadingSpinner) loadingSpinner.style.display = 'none';
+                if (questionInput) {
+                    questionInput.disabled = false;
+                    questionInput.focus();
+                }
+            }
+        }
+
+        // Add these new functions to the HTML template:
+
+        function startAnswerPolling(questionId) {
+            console.log(`Starting to poll for answer to question ${questionId}`);
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 30 attempts * 5 seconds = 2.5 minutes max
+            const pollInterval = 5000; // 5 seconds
+            
+            const poll = setInterval(async () => {
+                attempts++;
+                console.log(`Polling attempt ${attempts} for question ${questionId}`);
+                
+                try {
+                    const response = await fetch(`/video/{{ video.id }}/questions`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch questions');
+                    }
+                    
+                    const questions = await response.json();
+                    const currentQuestion = questions.find(q => q.id === questionId);
+                    
+                    if (currentQuestion && currentQuestion.answer) {
+                        // Answer is available! Stop polling and refresh
+                        console.log('Answer received! Refreshing questions...');
+                        clearInterval(poll);
+                        loadQuestions(); // Refresh the entire questions list
+                        showSuccess('Answer received!');
+                    } else if (attempts >= maxAttempts) {
+                        // Timeout reached
+                        console.log('Polling timeout reached');
+                        clearInterval(poll);
+                        showWarning('Answer is taking longer than expected. Please refresh the page manually.');
+                        loadQuestions(); // Refresh anyway to show current state
+                    }
+                    // If no answer and not timeout, continue polling
+                    
+                } catch (error) {
+                    console.error('Error during polling:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(poll);
+                        showError('Failed to get answer. Please refresh the page.');
+                    }
+                }
+            }, pollInterval);
+            
+            // Store the interval ID so we can clear it if needed
+            window.currentPollInterval = poll;
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+            successDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(successDiv, container.firstChild);
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (successDiv.parentElement) {
+                        successDiv.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        function showWarning(message) {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'alert alert-warning alert-dismissible fade show mt-3';
+            warningDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(warningDiv, container.firstChild);
+                
+                // Auto-remove after 8 seconds
+                setTimeout(() => {
+                    if (warningDiv.parentElement) {
+                        warningDiv.remove();
+                    }
+                }, 8000);
+            }
+        }
+
+        function createQuestionHtml(question) {
+            const date = new Date(question.created_at);
+            const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = date.toLocaleDateString();
+            
+            // Check if answer is still being generated
+            const isAnswerPending = !question.answer;
+            
+            return `
+                <div class="qa-item" id="question-${question.id}">
+                    <!-- Question Bubble (Right side) -->
+                    <div class="question-bubble">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <strong>You</strong>
+                            <small class="timestamp">${timeString} • ${dateString}</small>
+                        </div>
+                        <p class="mb-0">${escapeHtml(question.question)}</p>
+                    </div>
+                    
+                    <!-- Answer Section -->
+                    ${!isAnswerPending ? `
+                    <div class="answer-bubble">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="ai-badge">
+                                <i class="fas fa-robot me-1"></i>AI Assistant
+                            </span>
+                            <small class="timestamp">${timeString} • ${dateString}</small>
+                        </div>
+                        <p class="mb-2">${escapeHtml(question.answer)}</p>
+                        <div class="feedback-buttons">
+                            <small class="text-muted">Was this helpful?</small>
+                            <button class="btn btn-sm btn-outline-success feedback-btn me-1" onclick="submitFeedback(${question.id}, true, this)">
+                                <i class="fas fa-thumbs-up"></i> Satisfied
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger feedback-btn" onclick="regenerateAnswer(${question.id}, '${escapeHtml(question.question)}', this)">
+                                <i class="fas fa-sync-alt"></i> Not Satisfied
+                            </button>
+                        </div>
+
+                    </div>
+                    ` : `
+                    <!-- Show loading state if answer is still being generated -->
+                    <div class="loading-bubble">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <small class="text-muted">AI is generating answer... (auto-refresh in 5s)</small>
+                        </div>
+                    </div>
+                    `}
+                    <hr>
+                </div>
+            `;
+        }
+
+        async function submitFeedback(questionId, isHelpful, button) {
+            try {
+                const response = await fetch(`/question/${questionId}/feedback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        is_helpful: isHelpful,
+                        feedback_text: '' 
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to submit feedback');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show feedback confirmation
+                    const buttons = button.parentElement.querySelectorAll('.feedback-btn');
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        btn.classList.remove('btn-outline-success', 'btn-outline-danger');
+                    });
+                    
+                    if (isHelpful) {
+                        button.classList.add('btn-success');
+                        button.innerHTML = '<i class="fas fa-thumbs-up"></i> Thank you!';
+                    } else {
+                        button.classList.add('btn-danger');
+                        button.innerHTML = '<i class="fas fa-thumbs-down"></i> Noted!';
+                    }
+                    
+                } else {
+                    showError('Error submitting feedback');
+                }
+                
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                showError('Error submitting feedback');
+            }
+        }
+        async function regenerateAnswer(questionId, questionText, button) {
+            try {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fetching...';
+
+                const response = await fetch(`/question/${questionId}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: questionText, video_id: {{ video.id }} })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    const newAnswer = escapeHtml(result.new_answer);
+                    const parentDiv = button.closest('.answer-bubble');
+                    if (parentDiv) {
+                        parentDiv.insertAdjacentHTML(
+                            'beforeend',
+                            `<div class="mt-3 p-3 border rounded bg-light">
+                                <small class="text-muted"><i class="fas fa-globe me-1"></i> Updated internet-based answer:</small>
+                                <p class="mb-0 mt-2">${newAnswer.replace(/\n/g, '<br>')}</p>
+                            </div>`
+                        );
+                    }
+                    button.innerHTML = '<i class="fas fa-check-circle"></i> Updated';
+                } else {
+                    showError(result.error || 'Failed to fetch updated answer.');
+                    button.innerHTML = '<i class="fas fa-times"></i> Retry';
+                }
+            } catch (error) {
+                console.error('Error regenerating answer:', error);
+                showError('Error fetching updated answer from the internet.');
+                button.innerHTML = '<i class="fas fa-times"></i> Retry';
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+
+        // Auto-refresh functions
+        function startAutoRefresh() {
+            // Clear any existing interval
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+            
+            console.log('Starting auto-refresh every 10 seconds');
+            isAutoRefreshActive = true;
+            
+            // Set up new interval to refresh questions every 10 seconds
+            refreshInterval = setInterval(() => {
+                console.log('Auto-refreshing questions...');
+                loadQuestions();
+            }, 10000); // 10 seconds
+            
+            // Show a subtle notification that auto-refresh is active
+            showAutoRefreshNotification();
+            
+            // Also set a timeout to stop refreshing after 2 minutes (optional)
+            setTimeout(() => {
+                if (refreshInterval && isAutoRefreshActive) {
+                    console.log('Stopping auto-refresh after 2 minutes');
+                    stopAutoRefresh();
+                }
+            }, 120000); // 2 minutes
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                console.log('Stopping auto-refresh');
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+                isAutoRefreshActive = false;
+                
+                // Hide the auto-refresh notification
+                hideAutoRefreshNotification();
+            }
+        }
+
+        function showAutoRefreshNotification() {
+            // Create a subtle notification that auto-refresh is active
+            const notification = document.createElement('div');
+            notification.id = 'autoRefreshNotification';
+            notification.className = 'alert alert-info alert-dismissible fade show mt-3';
+            notification.innerHTML = `
+                <i class="fas fa-sync-alt me-2"></i>
+                Auto-refresh is active. Questions will update every 10 seconds.
+                <button type="button" class="btn-close" onclick="stopAutoRefresh()"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            if (container && !document.getElementById('autoRefreshNotification')) {
+                container.insertBefore(notification, container.querySelector('.row'));
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (notification.parentElement && isAutoRefreshActive) {
+                        notification.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        function hideAutoRefreshNotification() {
+            const notification = document.getElementById('autoRefreshNotification');
+            if (notification && notification.parentElement) {
+                notification.remove();
+            }
+        }
+
+        function scrollToBottom() {
+            const qaSection = document.getElementById('qaSection');
+            if (qaSection) {
+                qaSection.scrollTop = qaSection.scrollHeight;
+            }
+        }
+
+        function showError(message) {
+            // Show temporary error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-warning alert-dismissible fade show';
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            const container = document.querySelector('.container');
+            if (container) {
+                container.insertBefore(errorDiv, container.firstChild);
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (errorDiv.parentElement) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Stop auto-refresh when leaving the page
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+
+        // Stop auto-refresh when the page becomes hidden (user switches tabs)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopAutoRefresh();
+            }
+        });
+    </script>
+</body>
+</html>

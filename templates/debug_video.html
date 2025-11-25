@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Debug - {{ video.title }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Video Debug: {{ video.title }}</h1>
+    
+    <div class="section {% if debug_info.file_exists %}success{% else %}error{% endif %}">
+        <h2>File Status</h2>
+        <p><strong>Video Path:</strong> {{ debug_info.video_path }}</p>
+        <p><strong>File Exists:</strong> {{ debug_info.file_exists }}</p>
+        <p><strong>File Size:</strong> {{ debug_info.file_size }} bytes</p>
+        <p><strong>Download Status:</strong> {{ debug_info.download_status }}</p>
+        <p><strong>Video Folder:</strong> {{ debug_info.video_folder }}</p>
+    </div>
+
+    {% if debug_info.validation %}
+    <div class="section {% if debug_info.validation.is_valid %}success{% else %}error{% endif %}">
+        <h2>Video Validation</h2>
+        <p><strong>Valid:</strong> {{ debug_info.validation.is_valid }}</p>
+        <p><strong>Message:</strong> {{ debug_info.validation.message }}</p>
+    </div>
+    {% endif %}
+
+    {% if debug_info.ffprobe %}
+    <div class="section success">
+        <h2>FFprobe Details</h2>
+        <pre>{{ debug_info.ffprobe | tojson(indent=2) }}</pre>
+    </div>
+    {% elif debug_info.ffprobe_error %}
+    <div class="section error">
+        <h2>FFprobe Error</h2>
+        <p>{{ debug_info.ffprobe_error }}</p>
+    </div>
+    {% endif %}
+
+    {% if debug_info.folder_contents %}
+    <div class="section">
+        <h2>Folder Contents</h2>
+        <ul>
+            {% for item in debug_info.folder_contents %}
+            <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <a href="/video/{{ video.id }}">Back to Video</a> | 
+        <a href="/dashboard">Dashboard</a>
+    </div>
+</body>
+</html>
